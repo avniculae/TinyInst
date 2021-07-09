@@ -285,6 +285,10 @@ protected:
   
   void *GetTargetMethodAddress() { return target_address; }
 
+  section_64 GetSection(void *mach_header_address,
+                        const char segname[16],
+                        const char sectname[16]);
+
 private:
   static std::unordered_map<task_t, Debugger*> task_to_debugger_map;
   static std::mutex map_mutex;
@@ -362,6 +366,7 @@ private:
 
   void GetMachHeader(void *mach_header_axddress, mach_header_64 *mach_header);
   void GetLoadCommandsBuffer(void *mach_header_address, const mach_header_64 *mach_header, void **load_commands);
+  void GetSectionOfSegmentCommand(segment_command_64 *seg_cmd, const char sectname[16], section_64 **ret_section);
 
   template <class TCMD>
   void GetLoadCommand(mach_header_64 mach_header,

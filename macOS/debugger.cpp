@@ -425,6 +425,35 @@ void Debugger::GetLoadCommand(mach_header_64 mach_header,
   }
 }
 
+
+section_64 Debugger::GetSection(void *mach_header_address,
+                                const char segname[16],
+                                const char sectname[16]) {
+
+  mach_header_64 mach_header;
+  GetMachHeader(mach_header_address, &mach_header);
+
+  void *load_commands_buffer = NULL;
+  GetLoadCommandsBuffer(mach_header_address, &mach_header, &load_commands_buffer);
+
+  segment_command_64 *seg_cmd = NULL;
+  GetLoadCommand(mach_header, load_commands_buffer, LC_SEGMENT_64, segname, &seg_cmd);
+
+  uint64_t section_addr = (uint64_t)seg_cmd + sizeof(segment_command_64);
+  for (int i = 0; i < seg_cmd->nsects; ++i) {
+    section_64 *section = (section_64*)section_addr;
+    printf("section name %s\n", section->sectname);
+    if (!strcmp(section->sectname, sectname)) {
+      return *section;
+    }
+
+    section_addr += sizeof(struct section_64);
+  }
+
+  free(load_commands_buffer);
+  FATAL("Unable to find __unwind_section section in GetSection\n");
+}
+
 void *Debugger::MakeSharedMemory(mach_vm_address_t address, size_t size, MemoryProtection protection) {
   mach_port_t shm_port;
   if (address == 0)

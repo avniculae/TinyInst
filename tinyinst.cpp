@@ -995,8 +995,11 @@ void TinyInst::Init(int argc, char **argv) {
 #endif
   assembler_->Init();
 
-  // TODO: Replace with os-specific implementatopm
-  unwind_generator = new UnwindGenerator(*this);
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32)
+  // TO DO: Use the Windows version of UnwindGenerator
+#elif __APPLE__
+  unwind_generator = new UnwindGeneratorMacOS(*this);
+#endif
 
   instrumentation_disabled = false;
 
