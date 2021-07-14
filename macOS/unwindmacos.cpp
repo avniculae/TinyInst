@@ -27,11 +27,11 @@ void UnwindDataMacOS::AddEncoding(uint32_t encoding, size_t translated_address) 
     metadata_list.back().max_address = translated_address;
   }
 
-  printf("metadata list\n");
-  printf("-------------\n");
-  for (auto &it: metadata_list) {
-    printf("encoding %u min: 0x%llx max: 0x%llx\n", it.encoding, it.min_address, it.max_address);
-  }
+//  printf("metadata list\n");
+//  printf("-------------\n");
+//  for (auto &it: metadata_list) {
+//    printf("encoding %u min: 0x%llx max: 0x%llx\n", it.encoding, it.min_address, it.max_address);
+//  }
 }
 
 UnwindGeneratorMacOS::UnwindGeneratorMacOS(TinyInst& tinyinst) : UnwindGenerator(tinyinst) {
@@ -107,25 +107,16 @@ void UnwindGeneratorMacOS::FirstLevelLookup(ModuleInfo *module, size_t original_
     }
   }
 
-//  size_t curr_first_level_entry_addr = first_level_entries_start;
-//  for (int entry_cnt = 0; entry_cnt < module->unwind_data->header->indexCount - 1; ++entry_cnt) {
-//     struct unwind_info_section_header_index_entry *curr_first_level_entry =
-//       (struct unwind_info_section_header_index_entry *)curr_first_level_entry_addr;
-//
-//     printf("first level 0x%llx\n", curr_first_level_entry->functionOffset);
-//
-//     if (curr_first_level_entry->functionOffset <= original_offset) {
-//       struct unwind_info_section_header_index_entry *next_first_level_entry =
-//         (struct unwind_info_section_header_index_entry *)(curr_first_level_entry_addr + sizeof(struct unwind_info_section_header_index_entry));
-//
-//       if (original_offset < next_first_level_entry->functionOffset) {
-//         SecondLevelLookup(module, original_address, translated_address, curr_first_level_entry);
-//         return;
-//       }
-//     }
-//
-//     curr_first_level_entry_addr += sizeof(struct unwind_info_section_header_index_entry);
-//   }
+  size_t curr_first_level_entry_addr = first_level_entries_start;
+  for (int entry_cnt = 0; entry_cnt < module->unwind_data->header->indexCount - 1; ++entry_cnt) {
+     struct unwind_info_section_header_index_entry *curr_first_level_entry =
+       (struct unwind_info_section_header_index_entry *)curr_first_level_entry_addr;
+
+    SecondLevelLookup(module, original_address, translated_address, first_level_entry);
+
+
+     curr_first_level_entry_addr += sizeof(struct unwind_info_section_header_index_entry);
+   }
 
   if (first_level_entry->secondLevelPagesSectionOffset != 0) {
     SecondLevelLookup(module, original_address, translated_address, first_level_entry);
@@ -167,6 +158,7 @@ void UnwindGeneratorMacOS::SecondLevelLookup(ModuleInfo *module,
   if (*(uint32_t*)second_level_page_addr == UNWIND_SECOND_LEVEL_COMPRESSED) {
     SecondLevelLookupCompressed(module, original_address, translated_address, first_level_entry, second_level_page_addr);
   } else if (*(uint32_t*)second_level_page_addr == UNWIND_SECOND_LEVEL_REGULAR) {
+    printf("regular\n");
     SecondLevelLookupRegular(module, original_address, translated_address, first_level_entry, second_level_page_addr);
   }
 }
