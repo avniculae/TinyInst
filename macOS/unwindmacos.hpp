@@ -8,7 +8,6 @@
 #ifndef unwindmacos_hpp
 #define unwindmacos_hpp
 
-//#include <unordered_map>
 #include <vector>
 
 #include <stdio.h>
@@ -25,35 +24,23 @@ public:
   void *buffer;
   struct unwind_info_section_header *header;
 
-  void AddEncoding(size_t first_original_address,
-                   uint32_t encoding,
+  void AddEncoding(uint32_t encoding,
                    size_t translated_address);
 
   struct Metadata {
-    size_t first_original_address;
     uint32_t encoding;
     size_t min_address;
     size_t max_address;
 
     Metadata();
 
-    Metadata(size_t first_original_address,
-             uint32_t encoding,
+    Metadata(uint32_t encoding,
              size_t min_address,
              size_t max_address)
-    : first_original_address(first_original_address),
-      encoding(encoding),
+    : encoding(encoding),
       min_address(min_address),
       max_address(max_address)
     {}
-
-//    bool operator < (const Metadata &other) const {
-//      return first_original_address < other.first_original_address;
-//    }
-//
-//    bool operator == (const Metadata &other) const {
-//      return first_original_address == other.first_original_address;
-//    }
   };
 
   std::vector<Metadata> metadata_list;
@@ -74,7 +61,7 @@ public:
   void OnBasicBlockStart(ModuleInfo* module,
                          size_t original_address,
                          size_t translated_address);
-//
+
   void OnInstruction(ModuleInfo* module,
                      size_t original_address,
                      size_t translated_address);
@@ -83,15 +70,22 @@ public:
                        size_t original_address,
                        size_t translated_address);
 
-//protected:
-//  TinyInst& tinyinst_;
-
 private:
   void FirstLevelLookup(ModuleInfo *module, size_t original_address, size_t translated_address);
   void SecondLevelLookup(ModuleInfo *module,
                         size_t original_address,
                         size_t translated_address,
                         struct unwind_info_section_header_index_entry *first_level_entry);
+  void SecondLevelLookupCompressed(ModuleInfo *module,
+                                   size_t original_address,
+                                   size_t translated_address,
+                                   struct unwind_info_section_header_index_entry *first_level_entry,
+                                   size_t second_level_page_addr);
+  void SecondLevelLookupRegular(ModuleInfo *module,
+                                   size_t original_address,
+                                   size_t translated_address,
+                                   struct unwind_info_section_header_index_entry *first_level_entry,
+                                   size_t second_level_page_addr);
 };
 
 #endif /* unwindmacos_hpp */
