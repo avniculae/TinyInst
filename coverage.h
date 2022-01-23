@@ -20,6 +20,26 @@ limitations under the License.
 #include <string>
 #include <set>
 #include <list>
+#include <vector>
+
+enum I2SInstType {
+  CMP,
+  SUB,
+  CALL
+};
+
+struct I2SRecord {
+  I2SInstType type;
+  
+  int op_length;
+  std::vector<uint8_t> op_val[2];
+  
+  size_t bb_address; // for debugging
+  size_t bb_offset;
+  size_t cmp_offset;
+  size_t instrumentation_offset;
+  size_t instrumentation_size;
+};
 
 class ModuleCoverage {
 public:

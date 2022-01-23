@@ -181,12 +181,16 @@ void CopyOperandFromInstruction(xed_decoded_inst_t *src,
                                 xed_operand_enum_t src_operand_name,
                                 xed_operand_enum_t dest_operand_name,
                                 int dest_operand_index,
-                                size_t stack_offset)
+                                size_t stack_offset,
+                                int operand_width)
 {
   if ((src_operand_name >= XED_OPERAND_REG0) && (src_operand_name <= XED_OPERAND_REG8) &&
       (dest_operand_name >= XED_OPERAND_REG0) && (dest_operand_name <= XED_OPERAND_REG8))
   {
     xed_reg_enum_t r = xed_decoded_inst_get_reg(src, src_operand_name);
+    if (operand_width) {
+      r = GetFullSizeRegister(r, operand_width);
+    }
     xed_encoder_request_set_reg(dest, dest_operand_name, r);
   } else if (src_operand_name == XED_OPERAND_MEM0 && dest_operand_name == XED_OPERAND_MEM0) {
     xed_encoder_request_set_mem0(dest);
@@ -210,11 +214,11 @@ void CopyOperandFromInstruction(xed_decoded_inst_t *src,
       xed_decoded_inst_get_memory_operand_length(src, 0));
   } else if (src_operand_name == XED_OPERAND_IMM0 && dest_operand_name == XED_OPERAND_IMM0) {
     uint64_t imm = xed_decoded_inst_get_unsigned_immediate(src);
-    uint32_t width = xed_decoded_inst_get_immediate_width(src);
+    uint32_t width = (operand_width) ? operand_width : xed_decoded_inst_get_immediate_width(src);
     xed_encoder_request_set_uimm0(dest, imm, width);
   } else if (src_operand_name == XED_OPERAND_IMM0SIGNED && dest_operand_name == XED_OPERAND_IMM0SIGNED) {
     int32_t imm = xed_decoded_inst_get_signed_immediate(src);
-    uint32_t width = xed_decoded_inst_get_immediate_width(src);
+    uint32_t width = (operand_width) ? operand_width : xed_decoded_inst_get_immediate_width(src);
     xed_encoder_request_set_simm(dest, imm, width);
   } else {
     FATAL("Unsupported param");

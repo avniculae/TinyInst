@@ -150,14 +150,10 @@ bool LiteCov::ShouldInstrumentSub(ModuleInfo *module, Instruction &cmp_instr,
   }
 }
 
-InstructionResult LiteCov::InstrumentInstruction(ModuleInfo *module,
-                                                 Instruction &inst,
-                                                 size_t bb_address,
-                                                 size_t instruction_address) {
-  if (!compare_coverage) {
-    return INST_NOTHANDLED;
-  }
-
+InstructionResult LiteCov::InstrumentInstructionCmpCoverage(ModuleInfo *module,
+                                                            Instruction &inst,
+                                                            size_t bb_address,
+                                                            size_t instruction_address) {
   // jmp offset
   unsigned char JB[] = {0x0F, 0x82, 0x00, 0x00, 0x00, 0x00};
 
@@ -465,5 +461,289 @@ InstructionResult LiteCov::InstrumentInstruction(ModuleInfo *module,
 
   // return INST_NOTHANDLED which causes
   // the original instruction to be repeated
+  return INST_NOTHANDLED;
+}
+
+InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
+                                                    Instruction &inst,
+                                                    size_t bb_address,
+                                                    size_t instruction_address) {
+  xed_iclass_enum_t iclass;
+  iclass = xed_decoded_inst_get_iclass(&inst.xedd);
+
+  if ((iclass != XED_ICLASS_CMP) && (iclass != XED_ICLASS_SUB)) {
+    return INST_NOTHANDLED;
+  }
+
+  int operand_width = xed_decoded_inst_get_operand_width(&inst.xedd);
+
+  // printf("Cmp instruction at %llx, width: %d\n", instruction_address,
+  // operand_width);
+  
+  if (operand_width <= 8) {
+    return INST_NOTHANDLED;
+  }
+
+  // copy so we could modify it
+  xed_decoded_inst_t cmp_xedd = inst.xedd;
+  xed_decoded_inst_t *xedd = &cmp_xedd;
+
+  xed_state_t dstate;
+  dstate.mmode = (xed_machine_mode_enum_t)child_ptr_size == 8
+                     ? XED_MACHINE_MODE_LONG_64
+                     : XED_MACHINE_MODE_LEGACY_32;
+  dstate.stack_addr_width = (xed_address_width_enum_t)child_ptr_size;
+
+  xed_error_enum_t xed_error;
+  uint32_t olen;
+  unsigned char encoded[15];
+
+  const xed_inst_t *xi = xed_decoded_inst_inst(xedd);
+
+  const xed_operand_t *op1 = xed_inst_operand(xi, 0);
+  xed_operand_enum_t operand1_name = xed_operand_name(op1);
+  xed_reg_enum_t operand1_register = XED_REG_INVALID;
+  if (operand1_name == XED_OPERAND_REG0) {
+    operand1_register = xed_decoded_inst_get_reg(xedd, operand1_name);
+  }
+
+  const xed_operand_t *op2 = xed_inst_operand(xi, 1);
+  xed_operand_enum_t operand2_name = xed_operand_name(op2);
+  xed_reg_enum_t operand2_register = XED_REG_INVALID;
+  if ((operand2_name == XED_OPERAND_REG0) ||
+      (operand2_name == XED_OPERAND_REG1)) {
+    operand2_register = xed_decoded_inst_get_reg(xedd, operand2_name);
+  }
+
+  // don't do instrument comparisons with RSP
+  if ((operand1_register == XED_REG_RSP) ||
+      (operand1_register == XED_REG_ESP) || (operand1_register == XED_REG_SP)) {
+    return INST_NOTHANDLED;
+  }
+  if ((operand2_register == XED_REG_RSP) ||
+      (operand2_register == XED_REG_ESP) || (operand2_register == XED_REG_SP)) {
+    return INST_NOTHANDLED;
+  }
+
+  if (iclass == XED_ICLASS_SUB) {
+    Instruction instr;
+    instr.xedd = cmp_xedd;
+    if (!ShouldInstrumentSub(module, instr, instruction_address)) {
+      // printf("Not instrumenting SUB at %llx\n", instruction_address);
+      return INST_NOTHANDLED;
+    } else {
+      // printf("Founf a SUB instrumentation candidate at %llx\n",
+      // instruction_address);
+    }
+  }
+
+  ModuleCovData *data = (ModuleCovData *)module->client_data;
+
+  size_t bb_offset = bb_address - module->min_address;
+  size_t cmp_offset = instruction_address - bb_address;
+  if (cmp_offset >= 0x1000000) {
+    // only allow one cmp instrumentation per bb
+    WARN("Too large basic block for cmp coverage\n");
+    return INST_NOTHANDLED;
+  }
+
+  size_t instrumentation_start_offset = module->instrumented_code_allocated;
+  
+  bool mov_needed = false;
+  xed_reg_enum_t destination_reg;
+
+  // check if the first param is a register
+  // (if so, reuse it)
+  // otherwise get a temporary register
+  if (operand1_name == XED_OPERAND_REG0) {
+    destination_reg = operand1_register;
+  } else if (operand1_name == XED_OPERAND_MEM0) {
+    mov_needed = true;
+    destination_reg = GetUnusedRegister(operand2_register, operand_width);
+  } else {
+    FATAL("Unknown CMP first argument at %zx", instruction_address);
+  }
+
+  size_t mem_address = 0;
+  bool rip_relative = assembler_->IsRipRelative(
+      module, inst, instruction_address, &mem_address);
+
+  size_t rsp_displacement = 0;
+  bool rsp_relative = IsRspRelative(xedd, &rsp_displacement);
+
+  // start with NOP that's going to be replaced with
+  // JMP when the instrumentation is removed
+//  WriteCode(module, NOP5, sizeof(NOP5));
+
+  if (sp_offset) {
+    assembler_->OffsetStack(module, -sp_offset);
+  }
+
+  size_t stack_offset = sp_offset;
+
+  olen = Push(&dstate, destination_reg, encoded, sizeof(encoded));
+  WriteCode(module, encoded, olen);
+
+  stack_offset += child_ptr_size;
+
+  // todo don't do this for comparisons with rsp
+  
+  if (mov_needed) {
+    // mov destination_reg, 1st_param_of_cmp
+    xed_encoder_request_t mov;
+    xed_encoder_request_zero_set_mode(&mov, &dstate);
+    xed_encoder_request_set_iclass(&mov, XED_ICLASS_MOV);
+
+    xed_encoder_request_set_effective_operand_width(&mov, operand_width);
+    xed_encoder_request_set_effective_address_size(&mov,
+                                                   dstate.stack_addr_width * 8);
+
+    xed_encoder_request_set_reg(&mov, XED_OPERAND_REG0, destination_reg);
+    xed_encoder_request_set_operand_order(&mov, 0, XED_OPERAND_REG0);
+
+    CopyOperandFromInstruction(xedd, &mov, operand1_name, operand1_name, 1,
+                               stack_offset);
+
+    if (rip_relative) {
+      FixRipDisplacement(&mov, mem_address,
+                         GetCurrentInstrumentedAddress(module));
+    }
+
+    xed_error = xed_encode(&mov, encoded, sizeof(encoded), &olen);
+    if (xed_error != XED_ERROR_NONE) {
+      FATAL("Error encoding instruction");
+    }
+    WriteCode(module, encoded, olen);
+  }
+
+  xed_reg_enum_t rip = XED_REG_INVALID;
+  if (child_ptr_size == 8) rip = XED_REG_RIP;
+  olen = Mov(&dstate, 64, rip, 0x12345678, GetFullSizeRegister(destination_reg, child_ptr_size),
+             encoded, sizeof(encoded));
+  // check that the offset is at the end
+  if (*((int32_t *)((char *)encoded + olen - 4)) != 0x12345678) {
+    FATAL("Unexpected instruction encoding");
+  }
+  WriteCode(module, encoded, olen);
+
+  size_t bit_address =
+      (size_t)data->i2s_buffer_remote + data->i2s_buffer_next;
+  size_t mov_address = GetCurrentInstrumentedAddress(module);
+
+  // fix the mov address/displacement
+  if (child_ptr_size == 8) {
+    *(int32_t *)(module->instrumented_code_local +
+                 module->instrumented_code_allocated - 4) =
+        (int32_t)(bit_address - mov_address);
+  } else {
+    *(uint32_t *)(module->instrumented_code_local +
+                  module->instrumented_code_allocated - 4) =
+        (uint32_t)bit_address;
+  }
+
+//  olen = Pop(&dstate, destination_reg, encoded, sizeof(encoded));
+//  WriteCode(module, encoded, olen);
+//
+//  if (sp_offset) {
+//    assembler_->OffsetStack(module, sp_offset);
+//  }
+  
+  data->i2s_buffer_next += child_ptr_size;
+  
+  
+  //----------------------------
+  //----------------------------
+  
+//  olen = Push(&dstate, destination_reg, encoded, sizeof(encoded));
+//  WriteCode(module, encoded, olen);
+
+  xed_encoder_request_t mov;
+  xed_encoder_request_zero_set_mode(&mov, &dstate);
+  xed_encoder_request_set_iclass(&mov, XED_ICLASS_MOV);
+
+  xed_encoder_request_set_effective_operand_width(&mov, child_ptr_size * 8);
+  xed_encoder_request_set_effective_address_size(&mov,
+                                                 dstate.stack_addr_width * 8);
+
+  xed_encoder_request_set_reg(&mov, XED_OPERAND_REG0, GetFullSizeRegister(destination_reg, child_ptr_size));
+  xed_encoder_request_set_operand_order(&mov, 0, XED_OPERAND_REG0);
+
+  xed_operand_enum_t dest_operand_name = operand2_name;
+  if (dest_operand_name == XED_OPERAND_REG0) {
+    // already taken above
+    dest_operand_name = XED_OPERAND_REG1;
+  }
+
+  CopyOperandFromInstruction(xedd, &mov, operand2_name,
+                             dest_operand_name, 1, stack_offset, child_ptr_size);
+
+  xed_error = xed_encode(&mov, encoded, sizeof(encoded), &olen);
+  if (xed_error != XED_ERROR_NONE) {
+    printf("%s\n", xed_operand_enum_t2str(operand2_name));
+    FATAL("Error encoding instruction %s\n", xed_error_enum_t2str(xed_error));
+  }
+  WriteCode(module, encoded, olen);
+
+  rip = XED_REG_INVALID;
+  if (child_ptr_size == 8) rip = XED_REG_RIP;
+  olen = Mov(&dstate, 64, rip, 0x12345678, GetFullSizeRegister(destination_reg, child_ptr_size),
+             encoded, sizeof(encoded));
+  // check that the offset is at the end
+  if (*((int32_t *)((char *)encoded + olen - 4)) != 0x12345678) {
+    FATAL("Unexpected instruction encoding");
+  }
+  WriteCode(module, encoded, olen);
+
+  bit_address =
+      (size_t)data->i2s_buffer_remote + data->i2s_buffer_next;
+  mov_address = GetCurrentInstrumentedAddress(module);
+
+  // fix the mov address/displacement
+  if (child_ptr_size == 8) {
+    *(int32_t *)(module->instrumented_code_local +
+                 module->instrumented_code_allocated - 4) =
+        (int32_t)(bit_address - mov_address);
+  } else {
+    *(uint32_t *)(module->instrumented_code_local +
+                  module->instrumented_code_allocated - 4) =
+        (uint32_t)bit_address;
+  }
+
+  olen = Pop(&dstate, destination_reg, encoded, sizeof(encoded));
+  WriteCode(module, encoded, olen);
+
+  if (sp_offset) {
+    assembler_->OffsetStack(module, sp_offset);
+  }
+
+  data->i2s_buffer_next += child_ptr_size;
+  
+  I2SRecord *i2s_record = new I2SRecord();
+  i2s_record->type = CMP;
+  i2s_record->op_length = child_ptr_size;
+  i2s_record->instrumentation_offset = instrumentation_start_offset;
+  i2s_record->bb_address = bb_address;
+  i2s_record->bb_offset = bb_offset;
+  i2s_record->cmp_offset = cmp_offset;
+  i2s_record->instrumentation_size =
+      module->instrumented_code_allocated - instrumentation_start_offset;
+  data->buf_to_i2s[data->i2s_buffer_next - 2 * child_ptr_size] = i2s_record;
+
+  return INST_NOTHANDLED;
+}
+
+InstructionResult LiteCov::InstrumentInstruction(ModuleInfo *module,
+                                                 Instruction &inst,
+                                                 size_t bb_address,
+                                                 size_t instruction_address) {
+  
+  if (compare_coverage) {
+    return InstrumentInstructionCmpCoverage(module, inst, bb_address, instruction_address);
+  }
+  
+  if (input_to_state) {
+    return InstrumentInstructionI2S(module, inst, bb_address, instruction_address);
+  }
+  
   return INST_NOTHANDLED;
 }
