@@ -181,7 +181,8 @@ void CopyOperandFromInstruction(xed_decoded_inst_t *src,
                                 xed_operand_enum_t src_operand_name,
                                 xed_operand_enum_t dest_operand_name,
                                 int dest_operand_index,
-                                size_t stack_offset)
+                                size_t stack_offset,
+                                int operand_width)
 {
   if ((src_operand_name >= XED_OPERAND_REG0) && (src_operand_name <= XED_OPERAND_REG8) &&
       (dest_operand_name >= XED_OPERAND_REG0) && (dest_operand_name <= XED_OPERAND_REG8))
@@ -210,11 +211,11 @@ void CopyOperandFromInstruction(xed_decoded_inst_t *src,
       xed_decoded_inst_get_memory_operand_length(src, 0));
   } else if (src_operand_name == XED_OPERAND_IMM0 && dest_operand_name == XED_OPERAND_IMM0) {
     uint64_t imm = xed_decoded_inst_get_unsigned_immediate(src);
-    uint32_t width = xed_decoded_inst_get_immediate_width(src);
+    uint32_t width = (operand_width) ? operand_width : xed_decoded_inst_get_immediate_width(src);
     xed_encoder_request_set_uimm0(dest, imm, width);
   } else if (src_operand_name == XED_OPERAND_IMM0SIGNED && dest_operand_name == XED_OPERAND_IMM0SIGNED) {
     int32_t imm = xed_decoded_inst_get_signed_immediate(src);
-    uint32_t width = xed_decoded_inst_get_immediate_width(src);
+    uint32_t width = (operand_width) ? operand_width : xed_decoded_inst_get_immediate_width(src);
     xed_encoder_request_set_simm(dest, imm, width);
   } else {
     FATAL("Unsupported param");
@@ -246,7 +247,7 @@ uint32_t Mov(xed_state_t *dstate, uint32_t operand_width, xed_reg_enum_t base_re
 
   xed_error = xed_encode(&mov, encoded, (unsigned int)encoded_size, &olen);
   if (xed_error != XED_ERROR_NONE) {
-    FATAL("Error encoding instruction");
+    FATAL("Error encoding instruction %s\n", xed_error_enum_t2str(xed_error));
   }
 
   return olen;

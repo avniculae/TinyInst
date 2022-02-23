@@ -20,6 +20,83 @@ limitations under the License.
 #include <string>
 #include <set>
 #include <list>
+#include <vector>
+
+#define CF_BITMASK 0x0001
+#define ZF_BITMASK 0x0040
+#define SF_BITMASK 0x0080
+#define OF_BITMASK 0x0800
+
+#define CF_BIT(x) ((x&CF_BITMASK)?1:0)
+#define ZF_BIT(x) ((x&ZF_BITMASK)?1:0)
+#define SF_BIT(x) ((x&SF_BITMASK)?1:0)
+#define OF_BIT(x) ((x&OF_BITMASK)?1:0)
+
+enum I2SInstType {
+  CMPB,
+  CMPL,
+  CMPE,
+  CMPG,
+  CMPA,
+  CALL
+};
+
+struct I2SRecord {
+  I2SInstType type;
+  
+  int op_length;
+  std::vector<uint8_t> op_val[2];
+  size_t flags_reg;
+  
+  size_t bb_address; // for debugging
+  size_t bb_offset;
+  size_t cmp_offset;
+  size_t instrumentation_offset;
+  size_t instrumentation_size;
+  
+  void PrettyPrint() {
+    printf("----I2SRecord----\n");
+    printf("type: %d\n", type);
+    printf("flags: 0x%zx CF: %d ZF: %d SF: %d OF: %d\n", flags_reg,
+           CF_BIT(flags_reg), ZF_BIT(flags_reg), SF_BIT(flags_reg), OF_BIT((flags_reg)));
+    
+    printf("op0: ");
+    for (auto &byte: op_val[0]) {
+      printf("0x%02hhx ", byte);
+    }
+    printf("\n");
+    
+    printf("op1: ");
+    for (auto &byte: op_val[1]) {
+      printf("0x%02hhx ", byte);
+    }
+    printf("\n");
+    
+    printf("----------------\n");
+  }
+  
+  bool BranchPath() {
+    switch (type) {
+      case CMPB:
+        return CF_BIT(flags_reg);
+        
+      case CMPL:
+        return SF_BIT(flags_reg) ^ OF_BIT(flags_reg);
+        
+      case CMPE:
+        return ZF_BIT(flags_reg);
+        
+      case CMPA:
+        return ~CF_BIT(flags_reg) & ~ZF_BIT(flags_reg);
+        
+      case CMPG:
+        return ~(SF_BIT(flags_reg) ^ OF_BIT(flags_reg)) & ~ZF_BIT(flags_reg);
+        
+      default:
+        return false;
+    }
+  }
+};
 
 class ModuleCoverage {
 public:

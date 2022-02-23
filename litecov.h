@@ -55,6 +55,7 @@ public:
 
   std::set<uint64_t> collected_coverage;
   std::set<uint64_t> ignore_coverage;
+  std::set<uint64_t> saved_coverage;
 
   // maps offset in the coverage buffer to
   // offset of the basic block / edge code
@@ -70,6 +71,12 @@ public:
   void ClearCmpCoverageData();
   std::unordered_map<size_t, CmpCoverageRecord*> buf_to_cmp;
   std::unordered_map<uint64_t, CmpCoverageRecord*> coverage_to_cmp;
+  
+  uint8_t *i2s_buffer_remote;
+  size_t i2s_buffer_next;
+  
+  std::vector<I2SRecord*> collected_i2s_data;
+  std::unordered_map<size_t, I2SRecord*> buf_to_i2s;
 };
 
 class LiteCov : public TinyInst {
@@ -78,11 +85,19 @@ public:
 
   void GetCoverage(Coverage &coverage, bool clear_coverage);
   void ClearCoverage();
+  void EnableFullCoverage();
+  void DisableFullCoverage();
 
   // note: this does not affect already collected coverage
   void IgnoreCoverage(Coverage &coverage);
 
   bool HasNewCoverage();
+  
+  void EnableInputToState();
+  void DisableInputToState();
+  
+  std::vector<I2SRecord*> GetI2SRecords(bool clear_i2s);
+  void ClearI2SData();
 
 protected:
   virtual void OnModuleInstrumented(ModuleInfo *module) override;
@@ -101,7 +116,18 @@ protected:
   virtual InstructionResult InstrumentInstruction(ModuleInfo *module,
                                                   Instruction &inst,
                                                   size_t bb_address,
-                                                  size_t instruction_address) override;
+                                                  size_t instruction_address,
+                                                  bool before = true) override;
+  
+  virtual InstructionResult InstrumentInstructionCmpCoverage(ModuleInfo *module,
+                                                             Instruction &inst,
+                                                             size_t bb_address,
+                                                             size_t instruction_address);
+  
+  virtual InstructionResult InstrumentInstructionI2S(ModuleInfo *module,
+                                                     Instruction &inst,
+                                                     size_t bb_address,
+                                                     size_t instruction_address);
 
   void EmitCoverageInstrumentation(ModuleInfo *module, uint64_t coverage_code);
   void EmitCoverageInstrumentation(ModuleInfo *module,
@@ -132,6 +158,13 @@ protected:
 
   void CollectCoverage(ModuleCovData *data);
   void CollectCoverage();
+  
+  void EnableFullCoverage(ModuleCovData *data);
+  void DisableFullCoverage(ModuleCovData *data);
+  
+  void ClearI2SData(ModuleCovData *data);
+  void CollectI2SData(ModuleCovData *data);
+  void CollectI2SData();
 
   uint64_t GetCmpCode(size_t bb_offset, size_t cmp_offset, int bits_match);
   bool IsCmpCoverageCode(uint64_t code);
@@ -140,9 +173,18 @@ protected:
   bool ShouldInstrumentSub(ModuleInfo *module,
                            Instruction& cmp_instr,
                            size_t instruction_address);
+  
+  xed_iclass_enum_t NextCondIclass(ModuleInfo *module, Instruction &cmp_instr,
+                                   size_t instruction_address);
+  
+  I2SInstType GetI2SInstType(xed_iclass_enum_t next_cond_iclass);
+  
 private:
   CovType coverage_type;
   bool compare_coverage;
+  
+  bool input_to_state;
+  int I2S_BUFFER_SIZE;
 };
 
 #endif // LITECOV_H

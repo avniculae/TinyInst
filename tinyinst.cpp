@@ -571,6 +571,8 @@ void TinyInst::TranslateBasicBlock(char *address,
     if (inst.bbend) break;
 
     assembler_->FixInstructionAndOutput(module, inst, (const unsigned char *)(code_ptr + last_offset), (const unsigned char *)(address + last_offset));
+    
+    InstrumentInstruction(module, inst, (size_t)address, (size_t)address + last_offset, false);
   }
 
   if (!inst.bbend) {

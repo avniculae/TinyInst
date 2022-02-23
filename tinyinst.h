@@ -139,7 +139,8 @@ protected:
   virtual InstructionResult InstrumentInstruction(ModuleInfo *module,
                                                   Instruction& inst,
                                                   size_t bb_address,
-                                                  size_t instruction_address)
+                                                  size_t instruction_address,
+                                                  bool before = true)
   {
     return INST_NOTHANDLED;
   }

@@ -46,7 +46,8 @@ void CopyOperandFromInstruction(xed_decoded_inst_t *src,
                                 xed_operand_enum_t src_operand_name,
                                 xed_operand_enum_t dest_operand_name,
                                 int dest_operand_index,
-                                size_t stack_offset);
+                                size_t stack_offset,
+                                int operand_width = 0);
 
 uint32_t GetInstructionLength(xed_encoder_request_t *inst);
 
