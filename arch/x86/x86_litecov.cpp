@@ -464,6 +464,101 @@ InstructionResult LiteCov::InstrumentInstructionCmpCoverage(ModuleInfo *module,
   return INST_NOTHANDLED;
 }
 
+xed_iclass_enum_t LiteCov::NextCondIclass(ModuleInfo *module, Instruction &cmp_instr,
+                                     size_t instruction_address) {
+  // look after the sub instruction
+  // and check if the flags set in it
+  // are used for a conditional jump or move
+  xed_decoded_inst_t *cmp_xedd = &cmp_instr.xedd;
+
+  instruction_address += xed_decoded_inst_get_length(cmp_xedd);
+
+  AddressRange *range = GetRegion(module, instruction_address);
+  if (!range) {
+    return XED_ICLASS_INVALID;
+  }
+
+  uint32_t range_offset = (uint32_t)(instruction_address - (size_t)range->from);
+  size_t code_size = (uint32_t)((size_t)range->to - instruction_address);
+  char *code_ptr = range->data + range_offset;
+
+  size_t offset = 0, last_offset = 0;
+
+  xed_decoded_inst_t xedd;
+  xed_error_enum_t xed_error;
+
+  xed_state_t dstate;
+  dstate.mmode = (xed_machine_mode_enum_t)child_ptr_size == 8
+                     ? XED_MACHINE_MODE_LONG_64
+                     : XED_MACHINE_MODE_LEGACY_32;
+  dstate.stack_addr_width = (xed_address_width_enum_t)child_ptr_size;
+
+  xed_category_enum_t category;
+
+  while (true) {
+    xed_decoded_inst_zero_set_mode(&xedd, &dstate);
+    xed_error = xed_decode(&xedd, (const unsigned char *)(code_ptr + offset),
+                           (unsigned int)(code_size - offset));
+
+    if (xed_error != XED_ERROR_NONE) return XED_ICLASS_INVALID;
+
+    size_t instruction_length = xed_decoded_inst_get_length(&xedd);
+
+    category = xed_decoded_inst_get_category(&xedd);
+
+    xed_iclass_enum_t iclass;
+    switch (category) {
+      case XED_CATEGORY_CMOV:
+      case XED_CATEGORY_COND_BR:
+        iclass = xed_decoded_inst_get_iclass(&xedd);
+        return iclass;
+
+      case XED_CATEGORY_CALL:
+      case XED_CATEGORY_RET:
+      case XED_CATEGORY_UNCOND_BR:
+        return XED_ICLASS_INVALID;
+
+      default:
+        if (xed_decoded_inst_uses_rflags(&xedd)) return XED_ICLASS_INVALID;
+        break;
+    }
+
+    last_offset = offset;
+    offset += instruction_length;
+  }
+}
+
+I2SInstType LiteCov::GetI2SInstType(xed_iclass_enum_t next_cond_iclass) {
+  switch (next_cond_iclass) {
+    case XED_ICLASS_JB:
+//    case XED_ICLASS_JBE:
+    case XED_ICLASS_CMOVB:
+//    case XED_ICLASS_CMOVBE:
+      return CMPB;
+      
+    case XED_ICLASS_JL:
+//    case XED_ICLASS_JLE:
+    case XED_ICLASS_CMOVL:
+//    case XED_ICLASS_CMOVLE:
+      return CMPL;
+    
+    case XED_ICLASS_JNBE:       //JA
+//    case XED_ICLASS_JNB:      //JAE
+    case XED_ICLASS_CMOVNBE:    //JA
+//    case XED_ICLASS_CMOVNB:   //JAE
+      return CMPA;
+      
+    case XED_ICLASS_JNLE:       //JG
+//    case XED_ICLASS_JNL:        //JGE
+    case XED_ICLASS_CMOVNLE:    //JG
+//    case XED_ICLASS_CMOVNL:     //JGE
+      return CMPG;
+      
+    default:
+      return CMPE;
+  }
+}
+
 InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
                                                     Instruction &inst,
                                                     size_t bb_address,
@@ -525,16 +620,13 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
     return INST_NOTHANDLED;
   }
 
-  if (iclass == XED_ICLASS_SUB) {
-    Instruction instr;
-    instr.xedd = cmp_xedd;
-    if (!ShouldInstrumentSub(module, instr, instruction_address)) {
-      // printf("Not instrumenting SUB at %llx\n", instruction_address);
-      return INST_NOTHANDLED;
-    } else {
-      // printf("Founf a SUB instrumentation candidate at %llx\n",
-      // instruction_address);
-    }
+//  if (iclass == XED_ICLASS_SUB) {
+  Instruction instr;
+  instr.xedd = cmp_xedd;
+  xed_iclass_enum_t next_cond_iclass;
+  if ((next_cond_iclass = NextCondIclass(module, instr, instruction_address)) == XED_ICLASS_INVALID) {
+    // printf("Not instrumenting SUB at %llx\n", instruction_address);
+    return INST_NOTHANDLED;
   }
 
   ModuleCovData *data = (ModuleCovData *)module->client_data;
@@ -661,11 +753,11 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
   xed_encoder_request_zero_set_mode(&mov, &dstate);
   xed_encoder_request_set_iclass(&mov, XED_ICLASS_MOV);
 
-  xed_encoder_request_set_effective_operand_width(&mov, child_ptr_size * 8);
+  xed_encoder_request_set_effective_operand_width(&mov, operand_width);
   xed_encoder_request_set_effective_address_size(&mov,
                                                  dstate.stack_addr_width * 8);
 
-  xed_encoder_request_set_reg(&mov, XED_OPERAND_REG0, GetFullSizeRegister(destination_reg, child_ptr_size));
+  xed_encoder_request_set_reg(&mov, XED_OPERAND_REG0, destination_reg);
   xed_encoder_request_set_operand_order(&mov, 0, XED_OPERAND_REG0);
 
   xed_operand_enum_t dest_operand_name = operand2_name;
@@ -675,7 +767,12 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
   }
 
   CopyOperandFromInstruction(xedd, &mov, operand2_name,
-                             dest_operand_name, 1, stack_offset, child_ptr_size);
+                             dest_operand_name, 1, stack_offset, operand_width / 8);
+  
+  if (rip_relative) {
+    FixRipDisplacement(&mov, mem_address,
+                       GetCurrentInstrumentedAddress(module));
+  }
 
   xed_error = xed_encode(&mov, encoded, sizeof(encoded), &olen);
   if (xed_error != XED_ERROR_NONE) {
@@ -708,18 +805,67 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
                   module->instrumented_code_allocated - 4) =
         (uint32_t)bit_address;
   }
+  
+  data->i2s_buffer_next += child_ptr_size;
+  
+  
+  //=======================
+  
+  xed_encoder_request_t pushf_inst;
+  xed_encoder_request_zero_set_mode(&pushf_inst, &dstate);
+  xed_encoder_request_set_iclass(&pushf_inst, XED_ICLASS_PUSHF);
 
+  xed_encoder_request_set_effective_operand_width(&pushf_inst, dstate.stack_addr_width * 8);
+  xed_encoder_request_set_effective_address_size(&pushf_inst,
+                                                 dstate.stack_addr_width * 8);
+
+  xed_error = xed_encode(&pushf_inst, encoded, sizeof(encoded), &olen);
+  if (xed_error != XED_ERROR_NONE) {
+    FATAL("Error encoding instruction");
+  }
+  WriteCode(module, encoded, olen);
+
+  olen = Pop(&dstate, destination_reg, encoded, sizeof(encoded));
+  WriteCode(module, encoded, olen);
+
+  rip = XED_REG_INVALID;
+  if (child_ptr_size == 8) rip = XED_REG_RIP;
+  olen = Mov(&dstate, 64, rip, 0x12345678, GetFullSizeRegister(destination_reg, child_ptr_size),
+             encoded, sizeof(encoded));
+  // check that the offset is at the end
+  if (*((int32_t *)((char *)encoded + olen - 4)) != 0x12345678) {
+    FATAL("Unexpected instruction encoding");
+  }
+  WriteCode(module, encoded, olen);
+
+  bit_address =
+      (size_t)data->i2s_buffer_remote + data->i2s_buffer_next;
+  mov_address = GetCurrentInstrumentedAddress(module);
+
+  // fix the mov address/displacement
+  if (child_ptr_size == 8) {
+    *(int32_t *)(module->instrumented_code_local +
+                 module->instrumented_code_allocated - 4) =
+        (int32_t)(bit_address - mov_address);
+  } else {
+    *(uint32_t *)(module->instrumented_code_local +
+                  module->instrumented_code_allocated - 4) =
+        (uint32_t)bit_address;
+  }
+
+  data->i2s_buffer_next += child_ptr_size;
+  
+  //=======================
+  
   olen = Pop(&dstate, destination_reg, encoded, sizeof(encoded));
   WriteCode(module, encoded, olen);
 
   if (sp_offset) {
     assembler_->OffsetStack(module, sp_offset);
   }
-
-  data->i2s_buffer_next += child_ptr_size;
   
   I2SRecord *i2s_record = new I2SRecord();
-  i2s_record->type = CMP;
+  i2s_record->type = GetI2SInstType(next_cond_iclass);
   i2s_record->op_length = child_ptr_size;
   i2s_record->instrumentation_offset = instrumentation_start_offset;
   i2s_record->bb_address = bb_address;
@@ -727,7 +873,7 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
   i2s_record->cmp_offset = cmp_offset;
   i2s_record->instrumentation_size =
       module->instrumented_code_allocated - instrumentation_start_offset;
-  data->buf_to_i2s[data->i2s_buffer_next - 2 * child_ptr_size] = i2s_record;
+  data->buf_to_i2s[data->i2s_buffer_next - 3 * child_ptr_size] = i2s_record;
 
   return INST_NOTHANDLED;
 }
@@ -735,13 +881,13 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
 InstructionResult LiteCov::InstrumentInstruction(ModuleInfo *module,
                                                  Instruction &inst,
                                                  size_t bb_address,
-                                                 size_t instruction_address) {
-  
-  if (compare_coverage) {
+                                                 size_t instruction_address,
+                                                 bool before) {
+  if (compare_coverage && before) {
     return InstrumentInstructionCmpCoverage(module, inst, bb_address, instruction_address);
   }
   
-  if (input_to_state) {
+  if (input_to_state && !before) {
     return InstrumentInstructionI2S(module, inst, bb_address, instruction_address);
   }
   

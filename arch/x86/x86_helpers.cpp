@@ -188,9 +188,6 @@ void CopyOperandFromInstruction(xed_decoded_inst_t *src,
       (dest_operand_name >= XED_OPERAND_REG0) && (dest_operand_name <= XED_OPERAND_REG8))
   {
     xed_reg_enum_t r = xed_decoded_inst_get_reg(src, src_operand_name);
-    if (operand_width) {
-      r = GetFullSizeRegister(r, operand_width);
-    }
     xed_encoder_request_set_reg(dest, dest_operand_name, r);
   } else if (src_operand_name == XED_OPERAND_MEM0 && dest_operand_name == XED_OPERAND_MEM0) {
     xed_encoder_request_set_mem0(dest);
@@ -250,7 +247,7 @@ uint32_t Mov(xed_state_t *dstate, uint32_t operand_width, xed_reg_enum_t base_re
 
   xed_error = xed_encode(&mov, encoded, (unsigned int)encoded_size, &olen);
   if (xed_error != XED_ERROR_NONE) {
-    FATAL("Error encoding instruction");
+    FATAL("Error encoding instruction %s\n", xed_error_enum_t2str(xed_error));
   }
 
   return olen;

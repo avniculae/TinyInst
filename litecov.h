@@ -55,6 +55,7 @@ public:
 
   std::set<uint64_t> collected_coverage;
   std::set<uint64_t> ignore_coverage;
+  std::set<uint64_t> saved_coverage;
 
   // maps offset in the coverage buffer to
   // offset of the basic block / edge code
@@ -84,6 +85,8 @@ public:
 
   void GetCoverage(Coverage &coverage, bool clear_coverage);
   void ClearCoverage();
+  void EnableFullCoverage();
+  void DisableFullCoverage();
 
   // note: this does not affect already collected coverage
   void IgnoreCoverage(Coverage &coverage);
@@ -113,7 +116,8 @@ protected:
   virtual InstructionResult InstrumentInstruction(ModuleInfo *module,
                                                   Instruction &inst,
                                                   size_t bb_address,
-                                                  size_t instruction_address) override;
+                                                  size_t instruction_address,
+                                                  bool before = true) override;
   
   virtual InstructionResult InstrumentInstructionCmpCoverage(ModuleInfo *module,
                                                              Instruction &inst,
@@ -155,6 +159,9 @@ protected:
   void CollectCoverage(ModuleCovData *data);
   void CollectCoverage();
   
+  void EnableFullCoverage(ModuleCovData *data);
+  void DisableFullCoverage(ModuleCovData *data);
+  
   void ClearI2SData(ModuleCovData *data);
   void CollectI2SData(ModuleCovData *data);
   void CollectI2SData();
@@ -166,6 +173,11 @@ protected:
   bool ShouldInstrumentSub(ModuleInfo *module,
                            Instruction& cmp_instr,
                            size_t instruction_address);
+  
+  xed_iclass_enum_t NextCondIclass(ModuleInfo *module, Instruction &cmp_instr,
+                                   size_t instruction_address);
+  
+  I2SInstType GetI2SInstType(xed_iclass_enum_t next_cond_iclass);
   
 private:
   CovType coverage_type;

@@ -54,7 +54,7 @@ void LiteCov::Init(int argc, char **argv) {
   compare_coverage = GetBinaryOption("-cmp_coverage", argc, argv, false);
   
   input_to_state = false;
-  I2S_BUFFER_SIZE = GetIntOption("-i2s_buffer_size", argc, argv, 4096);
+  I2S_BUFFER_SIZE = GetIntOption("-i2s_buffer_size", argc, argv, 4096 * 8);
 
   for (ModuleInfo *module : instrumented_modules) {
     module->client_data = new ModuleCovData();
@@ -302,6 +302,30 @@ void LiteCov::ClearCoverage() {
   }
 }
 
+void LiteCov::EnableFullCoverage(ModuleCovData *data) {
+  data->saved_coverage.clear();
+  data->ignore_coverage.swap(data->saved_coverage);
+}
+
+void LiteCov::EnableFullCoverage() {
+  for (ModuleInfo *module : instrumented_modules) {
+    ModuleCovData *data = (ModuleCovData *)module->client_data;
+    EnableFullCoverage(data);
+  }
+}
+
+void LiteCov::DisableFullCoverage(ModuleCovData *data) {
+  data->ignore_coverage.clear();
+  data->ignore_coverage.swap(data->saved_coverage);
+}
+
+void LiteCov::DisableFullCoverage() {
+  for (ModuleInfo *module : instrumented_modules) {
+    ModuleCovData *data = (ModuleCovData *)module->client_data;
+    DisableFullCoverage(data);
+  }
+}
+
 // fetches and decodes coverage from the remote buffer
 void LiteCov::CollectCoverage(ModuleCovData *data) {
   if (!data->has_remote_coverage) return;
@@ -443,6 +467,9 @@ void LiteCov::CollectI2SData(ModuleCovData *data) {
       }
       i += i2s_record->op_length;
     }
+  
+    i2s_record->flags_reg = *(size_t*)(buf+i);
+    i += i2s_record->op_length;
     
     data->collected_i2s_data.push_back(i2s_record);
   }
