@@ -77,6 +77,7 @@ public:
   
   std::vector<I2SRecord*> collected_i2s_data;
   std::unordered_map<size_t, I2SRecord*> buf_to_i2s;
+  std::unordered_map<uint64_t, I2SRecord*> coverage_to_i2s;
 };
 
 class LiteCov : public TinyInst {
@@ -98,6 +99,7 @@ public:
   
   std::vector<I2SRecord*> GetI2SRecords(bool clear_i2s);
   void ClearI2SData();
+  std::unordered_map<uint64_t, uint64_t> tree_father;
 
 protected:
   virtual void OnModuleInstrumented(ModuleInfo *module) override;

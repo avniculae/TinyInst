@@ -44,6 +44,8 @@ enum I2SInstType {
 struct I2SRecord {
   I2SInstType type;
   
+  bool hit;
+  
   int op_length;
   std::vector<uint8_t> op_val[2];
   size_t flags_reg;
@@ -51,12 +53,13 @@ struct I2SRecord {
   size_t bb_address; // for debugging
   size_t bb_offset;
   size_t cmp_offset;
+  uint64_t cmp_code;
   size_t instrumentation_offset;
   size_t instrumentation_size;
   
   void PrettyPrint() {
     printf("----I2SRecord----\n");
-    printf("type: %d\n", type);
+    printf("type: %d hit: %d\n", type, hit);
     printf("flags: 0x%zx CF: %d ZF: %d SF: %d OF: %d\n", flags_reg,
            CF_BIT(flags_reg), ZF_BIT(flags_reg), SF_BIT(flags_reg), OF_BIT((flags_reg)));
     

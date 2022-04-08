@@ -193,6 +193,8 @@ void LiteCov::InstrumentBasicBlock(ModuleInfo *module, size_t bb_address) {
 void LiteCov::InstrumentEdge(ModuleInfo *previous_module,
                              ModuleInfo *next_module, size_t previous_address,
                              size_t next_address) {
+  // if input_to_state, update the dependency graph (which should
+  // be an unordered_map)
   if (coverage_type != COVTYPE_EDGE) return;
 
   // don't do anything on cross-module edges
@@ -461,6 +463,10 @@ void LiteCov::CollectI2SData(ModuleCovData *data) {
 
   for (size_t i = 0; i < data->i2s_buffer_next; ) {
     I2SRecord *i2s_record = data->buf_to_i2s[i];
+    
+    i2s_record->hit = (bool)buf[i];
+    i += 4;
+    
     for (int op_index = 0; op_index < 2; ++op_index) {
       for (int j = 0; j < i2s_record->op_length; ++j) {
         i2s_record->op_val[op_index].push_back(buf[i+j]);
@@ -471,7 +477,9 @@ void LiteCov::CollectI2SData(ModuleCovData *data) {
     i2s_record->flags_reg = *(size_t*)(buf+i);
     i += i2s_record->op_length;
     
-    data->collected_i2s_data.push_back(i2s_record);
+    if (i2s_record->hit) {
+      data->collected_i2s_data.push_back(i2s_record);
+    }
   }
 
   free(buf);

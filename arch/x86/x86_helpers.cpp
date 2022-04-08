@@ -253,6 +253,80 @@ uint32_t Mov(xed_state_t *dstate, uint32_t operand_width, xed_reg_enum_t base_re
   return olen;
 }
 
+uint32_t MovRev(xed_state_t *dstate, uint32_t operand_width, xed_reg_enum_t base_reg, int32_t displacement, xed_reg_enum_t r2, unsigned char *encoded, size_t encoded_size) {
+  uint32_t olen;
+  xed_error_enum_t xed_error;
+
+  xed_encoder_request_t mov;
+  xed_encoder_request_zero_set_mode(&mov, dstate);
+  xed_encoder_request_set_iclass(&mov, XED_ICLASS_MOV);
+
+  xed_encoder_request_set_effective_operand_width(&mov, operand_width);
+  xed_encoder_request_set_effective_address_size(&mov, dstate->stack_addr_width * 8);
+
+  xed_encoder_request_set_mem0(&mov);
+  xed_encoder_request_set_base0(&mov, base_reg);
+  xed_encoder_request_set_memory_displacement(&mov, displacement, 4);
+  // int length = xed_decoded_inst_get_memory_operand_length(xedd, 0);
+  xed_encoder_request_set_memory_operand_length(&mov, operand_width / 8);
+  xed_encoder_request_set_operand_order(&mov, 1, XED_OPERAND_MEM0);
+
+  xed_encoder_request_set_reg(&mov, XED_OPERAND_REG0, r2);
+  xed_encoder_request_set_operand_order(&mov, 0, XED_OPERAND_REG0);
+
+  xed_error = xed_encode(&mov, encoded, (unsigned int)encoded_size, &olen);
+  if (xed_error != XED_ERROR_NONE) {
+    FATAL("Error encoding instruction %s\n", xed_error_enum_t2str(xed_error));
+  }
+
+  return olen;
+}
+
+
+uint32_t MovImm(xed_state_t *dstate, uint32_t operand_width, xed_reg_enum_t base_reg, int32_t displacement, uint32_t imm, int nbytes, unsigned char *encoded, size_t encoded_size) {
+  
+  xed_encoder_instruction_t xed_inst;
+  xed_inst2(&xed_inst,
+            *dstate, XED_ICLASS_MOV, operand_width,
+            xed_mem_bd(base_reg, xed_disp(displacement, 32), dstate->stack_addr_width * 8),
+            xed_imm0(imm, nbytes * 8));
+  
+  uint32_t olen;
+  xed_error_enum_t xed_error;
+
+  xed_encoder_request_t mov;
+  xed_convert_to_encoder_request(&mov, &xed_inst);
+
+  xed_error = xed_encode(&mov, encoded, (unsigned int)encoded_size, &olen);
+  if (xed_error != XED_ERROR_NONE) {
+    FATAL("Error encoding instruction %s\n", xed_error_enum_t2str(xed_error));
+  }
+
+  return olen;
+}
+
+uint32_t Lea(xed_state_t *dstate, uint32_t operand_width, xed_reg_enum_t base_reg, int32_t displacement, xed_reg_enum_t r2, unsigned char *encoded, size_t encoded_size) {
+  
+  xed_encoder_instruction_t xed_inst;
+  xed_inst2(&xed_inst,
+            *dstate, XED_ICLASS_LEA, operand_width,
+            xed_reg(r2),
+            xed_mem_bd(base_reg, xed_disp(displacement, 32), dstate->stack_addr_width * 8));
+  
+  uint32_t olen;
+  xed_error_enum_t xed_error;
+
+  xed_encoder_request_t lea;
+  xed_convert_to_encoder_request(&lea, &xed_inst);
+
+  xed_error = xed_encode(&lea, encoded, (unsigned int)encoded_size, &olen);
+  if (xed_error != XED_ERROR_NONE) {
+    FATAL("Error encoding instruction %s\n", xed_error_enum_t2str(xed_error));
+  }
+
+  return olen;
+}
+
 uint32_t Lzcnt(xed_state_t *dstate, uint32_t operand_width, xed_reg_enum_t dest_reg, xed_reg_enum_t src_reg, unsigned char *encoded, size_t encoded_size) {
   uint32_t olen;
   xed_error_enum_t xed_error;

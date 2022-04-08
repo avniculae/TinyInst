@@ -33,6 +33,19 @@ uint32_t Mov(xed_state_t *dstate, uint32_t operand_width,
              xed_reg_enum_t r2, unsigned char *encoded,
              size_t encoded_size);
 
+uint32_t MovRev(xed_state_t *dstate, uint32_t operand_width,
+             xed_reg_enum_t base_reg, int32_t displacement,
+             xed_reg_enum_t r2, unsigned char *encoded,
+             size_t encoded_size);
+
+uint32_t MovImm(xed_state_t *dstate, uint32_t operand_width,
+             xed_reg_enum_t base_reg, int32_t displacement,
+             uint32_t imm, int nbytes, unsigned char *encoded,
+             size_t encoded_size);
+
+uint32_t Lea(xed_state_t *dstate, uint32_t operand_width, xed_reg_enum_t base_reg,
+             int32_t displacement, xed_reg_enum_t r2, unsigned char *encoded, size_t encoded_size);
+
 uint32_t Lzcnt(xed_state_t *dstate, uint32_t operand_width,
                xed_reg_enum_t dest_reg, xed_reg_enum_t src_reg,
                unsigned char *encoded, size_t encoded_size);

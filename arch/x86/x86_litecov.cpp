@@ -677,6 +677,108 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
   WriteCode(module, encoded, olen);
 
   stack_offset += child_ptr_size;
+  
+  //-----------------
+  // increase order number
+  
+  //move first 8 bytes from i2s_buffer_remote (i.e., order number) to destination_reg
+//  rip = XED_REG_INVALID;
+//  if (child_ptr_size == 8) rip = XED_REG_RIP;
+//  olen = MovRev(&dstate, 64, rip, 0x12345678, GetFullSizeRegister(destination_reg, child_ptr_size),
+//             encoded, sizeof(encoded));
+//  // check that the offset is at the end
+//  if (*((int32_t *)((char *)encoded + olen - 4)) != 0x12345678) {
+//    FATAL("Unexpected instruction encoding");
+//  }
+//  WriteCode(module, encoded, olen);
+//
+//  bit_address =
+//      (size_t)data->i2s_buffer_remote;
+//  mov_address = GetCurrentInstrumentedAddress(module);
+//
+//  // fix the mov address/displacement
+//  if (child_ptr_size == 8) {
+//    *(int32_t *)(module->instrumented_code_local +
+//                 module->instrumented_code_allocated - 4) =
+//        (int32_t)(bit_address - mov_address);
+//  } else {
+//    *(uint32_t *)(module->instrumented_code_local +
+//                  module->instrumented_code_allocated - 4) =
+//        (uint32_t)bit_address;
+//  }
+//
+//
+//  //mov destination_reg to this i2s_record's block in the remote buffer
+//
+//  rip = XED_REG_INVALID;
+//  if (child_ptr_size == 8) rip = XED_REG_RIP;
+//  olen = Mov(&dstate, 64, rip, 0x12345678, GetFullSizeRegister(destination_reg, child_ptr_size),
+//             encoded, sizeof(encoded));
+//  // check that the offset is at the end
+//  if (*((int32_t *)((char *)encoded + olen - 4)) != 0x12345678) {
+//    FATAL("Unexpected instruction encoding");
+//  }
+//  WriteCode(module, encoded, olen);
+//
+//  bit_address =
+//      (size_t)data->i2s_buffer_remote + data->i2s_buffer_next;
+//  mov_address = GetCurrentInstrumentedAddress(module);
+//
+//  // fix the mov address/displacement
+//  if (child_ptr_size == 8) {
+//    *(int32_t *)(module->instrumented_code_local +
+//                 module->instrumented_code_allocated - 4) =
+//        (int32_t)(bit_address - mov_address);
+//  } else {
+//    *(uint32_t *)(module->instrumented_code_local +
+//                  module->instrumented_code_allocated - 4) =
+//        (uint32_t)bit_address;
+//  }
+//
+//  data->i2s_buffer_next += child_ptr_size;
+//
+//
+//  //inc destination_reg using LEA
+//  olen = MovRev(&dstate, 64, GetFullSizeRegister(destination_reg, child_ptr_size), 0x1,
+//                GetFullSizeRegister(destination_reg, child_ptr_size),
+//                encoded, sizeof(encoded));
+//  WriteCode(module, encoded, olen);
+//
+  
+  //========================
+  
+  
+  //-------hit bit-----
+  
+  xed_reg_enum_t rip = XED_REG_INVALID;
+  if (child_ptr_size == 8) rip = XED_REG_RIP;
+  olen = MovImm(&dstate, 64, rip, 0x12345678, 1, 4,
+             encoded, sizeof(encoded));
+  
+  // check that the offset is at the end
+  if (*((int32_t *)((char *)encoded + olen - 8)) != 0x12345678) {
+    FATAL("Unexpected instruction encoding");
+  }
+  WriteCode(module, encoded, olen);
+
+  size_t bit_address =
+      (size_t)data->i2s_buffer_remote + data->i2s_buffer_next;
+  size_t mov_address = GetCurrentInstrumentedAddress(module);
+
+  // fix the mov address/displacement
+  if (child_ptr_size == 8) {
+    *(int32_t *)(module->instrumented_code_local +
+                 module->instrumented_code_allocated - 8) =
+        (int32_t)(bit_address - mov_address);
+  } else {
+    *(uint32_t *)(module->instrumented_code_local +
+                  module->instrumented_code_allocated - 8) =
+        (uint32_t)bit_address;
+  }
+  
+  data->i2s_buffer_next += 4;
+  
+  //------------- write first operand to the i2s_buffer
 
   // todo don't do this for comparisons with rsp
   
@@ -708,7 +810,7 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
     WriteCode(module, encoded, olen);
   }
 
-  xed_reg_enum_t rip = XED_REG_INVALID;
+  rip = XED_REG_INVALID;
   if (child_ptr_size == 8) rip = XED_REG_RIP;
   olen = Mov(&dstate, 64, rip, 0x12345678, GetFullSizeRegister(destination_reg, child_ptr_size),
              encoded, sizeof(encoded));
@@ -718,9 +820,9 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
   }
   WriteCode(module, encoded, olen);
 
-  size_t bit_address =
+  bit_address =
       (size_t)data->i2s_buffer_remote + data->i2s_buffer_next;
-  size_t mov_address = GetCurrentInstrumentedAddress(module);
+  mov_address = GetCurrentInstrumentedAddress(module);
 
   // fix the mov address/displacement
   if (child_ptr_size == 8) {
@@ -744,7 +846,7 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
   
   
   //----------------------------
-  //----------------------------
+  //---------------------------- write second operand to the i2s_buffer
   
 //  olen = Push(&dstate, destination_reg, encoded, sizeof(encoded));
 //  WriteCode(module, encoded, olen);
@@ -809,7 +911,7 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
   data->i2s_buffer_next += child_ptr_size;
   
   
-  //=======================
+  //======================= pushf & pop to get RFLAGS
   
   xed_encoder_request_t pushf_inst;
   xed_encoder_request_zero_set_mode(&pushf_inst, &dstate);
@@ -871,9 +973,13 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
   i2s_record->bb_address = bb_address;
   i2s_record->bb_offset = bb_offset;
   i2s_record->cmp_offset = cmp_offset;
+  i2s_record->cmp_code = GetCmpCode(bb_offset, cmp_offset, 0);
   i2s_record->instrumentation_size =
       module->instrumented_code_allocated - instrumentation_start_offset;
-  data->buf_to_i2s[data->i2s_buffer_next - 3 * child_ptr_size] = i2s_record;
+  data->buf_to_i2s[data->i2s_buffer_next - 3 * child_ptr_size - 4] = i2s_record;
+  data->coverage_to_i2s[i2s_record->cmp_code] = i2s_record;
+  
+  // Write cmp_code into the buffer ALWAYS at position 0 at runtime. Then, each CMP instruction reads from position 0 what was the last CMP instruction executed, thus creating the tree.
 
   return INST_NOTHANDLED;
 }
