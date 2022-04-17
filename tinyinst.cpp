@@ -548,8 +548,20 @@ void TinyInst::TranslateBasicBlock(char *address,
       GetCurrentInstrumentedAddress(module));
 
     // instruction-level-instrumentation
+    size_t instruction_address = (size_t)address + offset;
+    
+    Instruction inst_copy;
+    inst_copy.address = inst.address;
+    inst_copy.length = inst.length;
+    inst_copy.bbend = inst.bbend;
+    inst_copy.iclass = inst.iclass;
+    
+    xed_decoded_inst_t cmp_xedd = inst.xedd;
+    xed_decoded_inst_t *xedd = &cmp_xedd;
+    inst_copy.xedd = *xedd;
+  
     InstructionResult instrumentation_result =
-      InstrumentInstruction(module, inst, (size_t)address, (size_t)address + offset);
+      InstrumentInstruction(module, inst, (size_t)address, instruction_address);
 
     switch (instrumentation_result) {
     case INST_HANDLED:
@@ -572,7 +584,7 @@ void TinyInst::TranslateBasicBlock(char *address,
 
     assembler_->FixInstructionAndOutput(module, inst, (const unsigned char *)(code_ptr + last_offset), (const unsigned char *)(address + last_offset));
     
-    InstrumentInstruction(module, inst, (size_t)address, (size_t)address + last_offset, false);
+    InstrumentInstruction(module, inst_copy, (size_t)address, instruction_address, false);
   }
 
   if (!inst.bbend) {

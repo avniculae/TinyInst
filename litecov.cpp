@@ -52,6 +52,7 @@ void LiteCov::Init(int argc, char **argv) {
   }
 
   compare_coverage = GetBinaryOption("-cmp_coverage", argc, argv, false);
+  original_compare_coverage = compare_coverage;
   
   input_to_state = false;
   I2S_BUFFER_SIZE = GetIntOption("-i2s_buffer_size", argc, argv, 4096 * 8);
@@ -416,10 +417,12 @@ bool LiteCov::HasNewCoverage() {
 
 void LiteCov::EnableInputToState() {
   input_to_state = true;
+  compare_coverage = false;
 }
 
 void LiteCov::DisableInputToState() {
   input_to_state = false;
+  compare_coverage = original_compare_coverage;
 }
 
 std::vector<I2SRecord*> LiteCov::GetI2SRecords(bool clear_i2s) {
@@ -463,20 +466,20 @@ void LiteCov::CollectI2SData(ModuleCovData *data) {
 
   for (size_t i = 0; i < data->i2s_buffer_next; ) {
     I2SRecord *i2s_record = data->buf_to_i2s[i];
-    
+
     i2s_record->hit = (bool)buf[i];
     i += 4;
-    
+
     for (int op_index = 0; op_index < 2; ++op_index) {
       for (int j = 0; j < i2s_record->op_length; ++j) {
         i2s_record->op_val[op_index].push_back(buf[i+j]);
       }
       i += i2s_record->op_length;
     }
-  
+
     i2s_record->flags_reg = *(size_t*)(buf+i);
     i += i2s_record->op_length;
-    
+
     if (i2s_record->hit) {
       data->collected_i2s_data.push_back(i2s_record);
     }

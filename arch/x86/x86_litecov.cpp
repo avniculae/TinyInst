@@ -269,6 +269,7 @@ InstructionResult LiteCov::InstrumentInstructionCmpCoverage(ModuleInfo *module,
   match_width += 8;
   if (match_width == operand_width) {
     // we already have an (almost) full match
+//    printf("almost matched\n");
     return INST_NOTHANDLED;
   }
 
@@ -630,6 +631,7 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
   }
 
   ModuleCovData *data = (ModuleCovData *)module->client_data;
+  size_t i2s_buffer_start = data->i2s_buffer_next;
 
   size_t bb_offset = bb_address - module->min_address;
   size_t cmp_offset = instruction_address - bb_address;
@@ -677,6 +679,9 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
   WriteCode(module, encoded, olen);
 
   stack_offset += child_ptr_size;
+  
+  xed_reg_enum_t rip;
+  size_t bit_address, mov_address;
   
   //-----------------
   // increase order number
@@ -750,20 +755,20 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
   
   //-------hit bit-----
   
-  xed_reg_enum_t rip = XED_REG_INVALID;
+  rip = XED_REG_INVALID;
   if (child_ptr_size == 8) rip = XED_REG_RIP;
   olen = MovImm(&dstate, 64, rip, 0x12345678, 1, 4,
              encoded, sizeof(encoded));
-  
+
   // check that the offset is at the end
   if (*((int32_t *)((char *)encoded + olen - 8)) != 0x12345678) {
     FATAL("Unexpected instruction encoding");
   }
   WriteCode(module, encoded, olen);
 
-  size_t bit_address =
+  bit_address =
       (size_t)data->i2s_buffer_remote + data->i2s_buffer_next;
-  size_t mov_address = GetCurrentInstrumentedAddress(module);
+  mov_address = GetCurrentInstrumentedAddress(module);
 
   // fix the mov address/displacement
   if (child_ptr_size == 8) {
@@ -775,7 +780,7 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
                   module->instrumented_code_allocated - 8) =
         (uint32_t)bit_address;
   }
-  
+
   data->i2s_buffer_next += 4;
   
   //------------- write first operand to the i2s_buffer
@@ -835,21 +840,11 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
         (uint32_t)bit_address;
   }
 
-//  olen = Pop(&dstate, destination_reg, encoded, sizeof(encoded));
-//  WriteCode(module, encoded, olen);
-//
-//  if (sp_offset) {
-//    assembler_->OffsetStack(module, sp_offset);
-//  }
-  
   data->i2s_buffer_next += child_ptr_size;
   
   
   //----------------------------
   //---------------------------- write second operand to the i2s_buffer
-  
-//  olen = Push(&dstate, destination_reg, encoded, sizeof(encoded));
-//  WriteCode(module, encoded, olen);
 
   xed_encoder_request_t mov;
   xed_encoder_request_zero_set_mode(&mov, &dstate);
@@ -870,11 +865,7 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
 
   CopyOperandFromInstruction(xedd, &mov, operand2_name,
                              dest_operand_name, 1, stack_offset, operand_width / 8);
-  
-  if (rip_relative) {
-    FixRipDisplacement(&mov, mem_address,
-                       GetCurrentInstrumentedAddress(module));
-  }
+
 
   xed_error = xed_encode(&mov, encoded, sizeof(encoded), &olen);
   if (xed_error != XED_ERROR_NONE) {
@@ -907,9 +898,9 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
                   module->instrumented_code_allocated - 4) =
         (uint32_t)bit_address;
   }
-  
+
   data->i2s_buffer_next += child_ptr_size;
-  
+
   
   //======================= pushf & pop to get RFLAGS
   
@@ -976,7 +967,7 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
   i2s_record->cmp_code = GetCmpCode(bb_offset, cmp_offset, 0);
   i2s_record->instrumentation_size =
       module->instrumented_code_allocated - instrumentation_start_offset;
-  data->buf_to_i2s[data->i2s_buffer_next - 3 * child_ptr_size - 4] = i2s_record;
+  data->buf_to_i2s[i2s_buffer_start] = i2s_record;
   data->coverage_to_i2s[i2s_record->cmp_code] = i2s_record;
   
   // Write cmp_code into the buffer ALWAYS at position 0 at runtime. Then, each CMP instruction reads from position 0 what was the last CMP instruction executed, thus creating the tree.

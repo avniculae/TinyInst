@@ -184,6 +184,7 @@ protected:
 private:
   CovType coverage_type;
   bool compare_coverage;
+  bool original_compare_coverage;
   
   bool input_to_state;
   int I2S_BUFFER_SIZE;
