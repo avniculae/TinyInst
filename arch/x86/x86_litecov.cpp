@@ -67,6 +67,37 @@ void LiteCov::NopCmpCovInstructions(ModuleInfo *module,
   }
 }
 
+void LiteCov::NopI2SInstructions(ModuleInfo *module,
+                                 I2SRecord &i2s_record) {
+  unsigned char JMP[] = {0xe9, 0x00, 0x00, 0x00, 0x00};
+  WriteCodeAtOffset(module, i2s_record.instrumentation_offset, JMP,
+                             sizeof(JMP));
+  *(int32_t *)(module->instrumented_code_local +
+               i2s_record.instrumentation_offset + sizeof(JMP) - 4) =
+      (int32_t)(i2s_record.instrumentation_size - sizeof(JMP));
+  CommitCode(module, i2s_record.instrumentation_offset, sizeof(JMP));
+  i2s_record.ignored = true;
+}
+
+//void LiteCov::TemporarlyNopI2SInstructions(ModuleInfo *module,
+//                                           size_t instrumentation_offset,
+//                                           size_t instrumentation_size) {
+//  unsigned char JMP[] = {0xe9, 0x00, 0x00, 0x00, 0x00};
+//  WriteCodeAtOffset(module, instrumentation_offset, JMP,
+//                             sizeof(JMP));
+//  *(int32_t *)(module->instrumented_code_local +
+//               instrumentation_offset + sizeof(JMP) - 4) =
+//      (int32_t)(instrumentation_size - sizeof(JMP));
+//  CommitCode(module, instrumentation_offset, sizeof(JMP));
+//}
+//
+//void LiteCov::UnnopTemporarlyNoppedI2SInstructions(ModuleInfo *module,
+//                                                   size_t instrumentation_offset) {
+//  WriteCodeAtOffset(module, instrumentation_offset, NOP5,
+//                             sizeof(NOP5));
+//  CommitCode(module, instrumentation_offset, sizeof(NOP5));
+//}
+
 void LiteCov::EmitCoverageInstrumentation(ModuleInfo *module,
                                           size_t bit_address,
                                           size_t mov_address) {
@@ -665,9 +696,10 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
   size_t rsp_displacement = 0;
   bool rsp_relative = IsRspRelative(xedd, &rsp_displacement);
 
-  // start with NOP that's going to be replaced with
-  // JMP when the instrumentation is removed
-//  WriteCode(module, NOP5, sizeof(NOP5));
+  // start with JMP that's going to be replaced with
+  // NOP when the instrumentation is added
+//  unsigned char JMP[] = {0xe9, 0x00, 0x00, 0x00, 0x00};
+  WriteCode(module, NOP5, sizeof(NOP5));
 
   if (sp_offset) {
     assembler_->OffsetStack(module, -sp_offset);
@@ -958,6 +990,7 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
   }
   
   I2SRecord *i2s_record = new I2SRecord();
+  i2s_record->ignored = false;
   i2s_record->type = GetI2SInstType(next_cond_iclass);
   i2s_record->op_length = child_ptr_size;
   i2s_record->instrumentation_offset = instrumentation_start_offset;
@@ -969,6 +1002,11 @@ InstructionResult LiteCov::InstrumentInstructionI2S(ModuleInfo *module,
       module->instrumented_code_allocated - instrumentation_start_offset;
   data->buf_to_i2s[i2s_buffer_start] = i2s_record;
   data->coverage_to_i2s[i2s_record->cmp_code] = i2s_record;
+  
+//  TemporarlyNopI2SInstructions(module, *i2s_record);
+//  *(int32_t *)(module->instrumented_code_local +
+//               i2s_record->instrumentation_offset + sizeof(JMP) - 4) =
+//      (int32_t)(i2s_record->instrumentation_size - sizeof(JMP));
   
   // Write cmp_code into the buffer ALWAYS at position 0 at runtime. Then, each CMP instruction reads from position 0 what was the last CMP instruction executed, thus creating the tree.
 

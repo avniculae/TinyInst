@@ -72,10 +72,11 @@ public:
   std::unordered_map<size_t, CmpCoverageRecord*> buf_to_cmp;
   std::unordered_map<uint64_t, CmpCoverageRecord*> coverage_to_cmp;
   
+  void ClearI2SRecords();
   uint8_t *i2s_buffer_remote;
   size_t i2s_buffer_next;
   
-  std::vector<I2SRecord*> collected_i2s_data;
+  std::vector<I2SData> collected_i2s_data;
   std::unordered_map<size_t, I2SRecord*> buf_to_i2s;
   std::unordered_map<uint64_t, I2SRecord*> coverage_to_i2s;
 };
@@ -97,7 +98,7 @@ public:
   void EnableInputToState();
   void DisableInputToState();
   
-  std::vector<I2SRecord*> GetI2SRecords(bool clear_i2s);
+  std::vector<I2SData> GetI2SData(bool clear_i2s);
   void ClearI2SData();
   std::unordered_map<uint64_t, uint64_t> tree_father;
 
@@ -141,6 +142,14 @@ protected:
   void NopCmpCovInstructions(ModuleInfo *module,
                              CmpCoverageRecord &cmp_record,
                              int matched_width);
+  
+  void NopI2SInstructions(ModuleInfo *module,
+                          I2SRecord &i2s_record);
+//  void TemporarlyNopI2SInstructions(ModuleInfo *module,
+//                                    size_t instrumentation_offset,
+//                                    size_t instrumentation_size);
+//  void UnnopTemporarlyNoppedI2SInstructions(ModuleInfo *module,
+//                                            size_t instrumentation_offset);
 
 
   // compute a unique code for a basic block
@@ -167,10 +176,12 @@ protected:
   void ClearI2SData(ModuleCovData *data);
   void CollectI2SData(ModuleCovData *data);
   void CollectI2SData();
+  void ClearI2SRemoteBuffer(ModuleCovData *data);
 
   uint64_t GetCmpCode(size_t bb_offset, size_t cmp_offset, int bits_match);
   bool IsCmpCoverageCode(uint64_t code);
   void ClearCmpCoverageInstrumentation(ModuleInfo *module, uint64_t coverage_code);
+  void ClearI2SInstrumentation(ModuleInfo *module, uint64_t coverage_code);
   void CollectCmpCoverage(ModuleCovData *data, size_t buffer_offset, char buffer_value);
   bool ShouldInstrumentSub(ModuleInfo *module,
                            Instruction& cmp_instr,
@@ -188,6 +199,7 @@ private:
   
   bool input_to_state;
   int I2S_BUFFER_SIZE;
+  bool i2s_mutator_enabled;
 };
 
 #endif // LITECOV_H

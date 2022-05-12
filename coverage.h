@@ -45,10 +45,8 @@ struct I2SRecord {
   I2SInstType type;
   
   bool hit;
-  
+  bool ignored;
   int op_length;
-  std::vector<uint8_t> op_val[2];
-  size_t flags_reg;
   
   size_t bb_address; // for debugging
   size_t bb_offset;
@@ -56,10 +54,17 @@ struct I2SRecord {
   uint64_t cmp_code;
   size_t instrumentation_offset;
   size_t instrumentation_size;
+};
+
+struct I2SData {
+  std::vector<uint8_t> op_val[2];
+  size_t flags_reg;
+  
+  I2SRecord *i2s_record;
   
   void PrettyPrint() {
     printf("----I2SRecord----\n");
-    printf("type: %d hit: %d\n", type, hit);
+    printf("type: %d hit: %d\n", i2s_record->type, i2s_record->hit);
     printf("flags: 0x%zx CF: %d ZF: %d SF: %d OF: %d\n", flags_reg,
            CF_BIT(flags_reg), ZF_BIT(flags_reg), SF_BIT(flags_reg), OF_BIT((flags_reg)));
     
@@ -79,7 +84,7 @@ struct I2SRecord {
   }
   
   bool BranchPath() {
-    switch (type) {
+    switch (i2s_record->type) {
       case CMPB:
         return CF_BIT(flags_reg);
         
