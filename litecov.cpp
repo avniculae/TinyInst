@@ -138,9 +138,9 @@ void LiteCov::ClearCoverageInstrumentation(ModuleInfo *module,
     if (compare_coverage) {
       ClearCmpCoverageInstrumentation(module, coverage_code);
     }
-    if (input_to_state) {
-      ClearI2SInstrumentation(module, coverage_code);
-    }
+//    if (input_to_state) {
+//      ClearI2SInstrumentation(module, coverage_code);
+//    }
     
     return;
   }
@@ -445,14 +445,14 @@ void LiteCov::EnableInputToState() {
   
   i2s_mutator_enabled = true;
   
-//  for (ModuleInfo *module : instrumented_modules) {
-//    ModuleCovData *data = (ModuleCovData *)module->client_data;
-//    for (auto& [buffer_offset, i2s_record]: data->coverage_to_i2s) {
-//      if (i2s_record->ignored) {
-//        UnnopTemporarlyNoppedI2SInstructions(module, i2s_record->instrumentation_offset);
-//      }
-//    }
-//
+  for (ModuleInfo *module : instrumented_modules) {
+    ModuleCovData *data = (ModuleCovData *)module->client_data;
+    for (auto& [buffer_offset, i2s_record]: data->coverage_to_i2s) {
+      if (i2s_record->ignored) {
+        UnnopTemporarlyNoppedI2SInstructions(module, i2s_record->instrumentation_offset);
+      }
+    }
+
 //    for (auto& [buffer_offset, cmp_record]: data->buf_to_cmp) {
 //      if (!cmp_record->ignored) {
 //        TemporarlyNopI2SInstructions(module,
@@ -460,22 +460,22 @@ void LiteCov::EnableInputToState() {
 //                                     cmp_record->instrumentation_size);
 //      }
 //    }
-//  }
+  }
   
 //  input_to_state = true;
 //  compare_coverage = false;
 }
 
 void LiteCov::DisableInputToState() {
-//  for (ModuleInfo *module : instrumented_modules) {
-//    ModuleCovData *data = (ModuleCovData *)module->client_data;
-//    for (auto& [buffer_offset, i2s_record]: data->coverage_to_i2s) {
-//      if (i2s_record->ignored) {
-//        TemporarlyNopI2SInstructions(module,
-//                                     i2s_record->instrumentation_offset,
-//                                     i2s_record->instrumentation_size);
-//      }
-//    }
+  for (ModuleInfo *module : instrumented_modules) {
+    ModuleCovData *data = (ModuleCovData *)module->client_data;
+    for (auto& [buffer_offset, i2s_record]: data->coverage_to_i2s) {
+      if (i2s_record->ignored) {
+        TemporarlyNopI2SInstructions(module,
+                                     i2s_record->instrumentation_offset,
+                                     i2s_record->instrumentation_size);
+      }
+    }
 //
 //    for (auto& [buffer_offset, cmp_record]: data->buf_to_cmp) {
 //      if (!cmp_record->ignored) {
@@ -483,7 +483,7 @@ void LiteCov::DisableInputToState() {
 //                                             cmp_record->instrumentation_offset);
 //      }
 //    }
-//  }
+  }
 
   i2s_mutator_enabled = false;
   
@@ -607,19 +607,19 @@ void LiteCov::ClearCmpCoverageInstrumentation(ModuleInfo *module,
   NopCmpCovInstructions(module, *cmp_record, matched_width);
 }
 
-void LiteCov::ClearI2SInstrumentation(ModuleInfo *module, uint64_t coverage_code) {
-  if (!IsCmpCoverageCode(coverage_code)) return;
-  
-  ModuleCovData *data = (ModuleCovData *)module->client_data;
-  auto iter = data->coverage_to_i2s.find(coverage_code);
-  if (iter == data->coverage_to_i2s.end()) return;
-  
-  I2SRecord *i2s_record = iter->second;
-  
-  if (i2s_record->ignored) return;
-  
-  NopI2SInstructions(module, *i2s_record);
-}
+//void LiteCov::ClearI2SInstrumentation(ModuleInfo *module, uint64_t coverage_code) {
+//  if (!IsCmpCoverageCode(coverage_code)) return;
+//
+//  ModuleCovData *data = (ModuleCovData *)module->client_data;
+//  auto iter = data->coverage_to_i2s.find(coverage_code);
+//  if (iter == data->coverage_to_i2s.end()) return;
+//
+//  I2SRecord *i2s_record = iter->second;
+//
+//  if (i2s_record->ignored) return;
+//
+//  NopI2SInstructions(module, *i2s_record);
+//}
 
 void LiteCov::CollectCmpCoverage(ModuleCovData *data, size_t buffer_offset,
                                  char buffer_value) {

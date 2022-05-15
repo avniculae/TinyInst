@@ -143,13 +143,13 @@ protected:
                              CmpCoverageRecord &cmp_record,
                              int matched_width);
   
-  void NopI2SInstructions(ModuleInfo *module,
-                          I2SRecord &i2s_record);
-//  void TemporarlyNopI2SInstructions(ModuleInfo *module,
-//                                    size_t instrumentation_offset,
-//                                    size_t instrumentation_size);
-//  void UnnopTemporarlyNoppedI2SInstructions(ModuleInfo *module,
-//                                            size_t instrumentation_offset);
+//  void NopI2SInstructions(ModuleInfo *module,
+//                          I2SRecord &i2s_record);
+  void TemporarlyNopI2SInstructions(ModuleInfo *module,
+                                    size_t instrumentation_offset,
+                                    size_t instrumentation_size);
+  void UnnopTemporarlyNoppedI2SInstructions(ModuleInfo *module,
+                                            size_t instrumentation_offset);
 
 
   // compute a unique code for a basic block
@@ -181,7 +181,7 @@ protected:
   uint64_t GetCmpCode(size_t bb_offset, size_t cmp_offset, int bits_match);
   bool IsCmpCoverageCode(uint64_t code);
   void ClearCmpCoverageInstrumentation(ModuleInfo *module, uint64_t coverage_code);
-  void ClearI2SInstrumentation(ModuleInfo *module, uint64_t coverage_code);
+//  void ClearI2SInstrumentation(ModuleInfo *module, uint64_t coverage_code);
   void CollectCmpCoverage(ModuleCovData *data, size_t buffer_offset, char buffer_value);
   bool ShouldInstrumentSub(ModuleInfo *module,
                            Instruction& cmp_instr,
