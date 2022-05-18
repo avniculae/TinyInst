@@ -448,7 +448,7 @@ void LiteCov::EnableInputToState() {
   for (ModuleInfo *module : instrumented_modules) {
     ModuleCovData *data = (ModuleCovData *)module->client_data;
     for (auto& [buffer_offset, i2s_record]: data->coverage_to_i2s) {
-      if (i2s_record->ignored) {
+      if (!i2s_record->ignored) {
         UnnopTemporarlyNoppedI2SInstructions(module, i2s_record->instrumentation_offset);
       }
     }
@@ -470,7 +470,7 @@ void LiteCov::DisableInputToState() {
   for (ModuleInfo *module : instrumented_modules) {
     ModuleCovData *data = (ModuleCovData *)module->client_data;
     for (auto& [buffer_offset, i2s_record]: data->coverage_to_i2s) {
-      if (i2s_record->ignored) {
+      if (!i2s_record->ignored) {
         TemporarlyNopI2SInstructions(module,
                                      i2s_record->instrumentation_offset,
                                      i2s_record->instrumentation_size);
@@ -550,6 +550,8 @@ void LiteCov::CollectI2SData(ModuleCovData *data) {
     i2s_data.flags_reg = *(size_t*)(buf+i);
     i += i2s_record->op_length;
 
+//    printf("0x%zx\n", i2s_record->bb_address + i2s_record->cmp_offset);
+//    printf("%d %d\n", i2s_record->ignored, i2s_record->hit);
     if (!i2s_record->ignored && i2s_record->hit) {
       data->collected_i2s_data.push_back(i2s_data);
     }

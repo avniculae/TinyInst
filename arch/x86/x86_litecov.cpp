@@ -542,6 +542,7 @@ xed_iclass_enum_t LiteCov::NextCondIclass(ModuleInfo *module, Instruction &cmp_i
     switch (category) {
       case XED_CATEGORY_CMOV:
       case XED_CATEGORY_COND_BR:
+      case XED_CATEGORY_SETCC:
         iclass = xed_decoded_inst_get_iclass(&xedd);
         return iclass;
 
@@ -566,24 +567,28 @@ I2SInstType LiteCov::GetI2SInstType(xed_iclass_enum_t next_cond_iclass) {
 //    case XED_ICLASS_JBE:
     case XED_ICLASS_CMOVB:
 //    case XED_ICLASS_CMOVBE:
+    case XED_ICLASS_SETB:
       return CMPB;
       
     case XED_ICLASS_JL:
 //    case XED_ICLASS_JLE:
     case XED_ICLASS_CMOVL:
 //    case XED_ICLASS_CMOVLE:
+    case XED_ICLASS_SETL:
       return CMPL;
     
     case XED_ICLASS_JNBE:       //JA
 //    case XED_ICLASS_JNB:      //JAE
     case XED_ICLASS_CMOVNBE:    //JA
 //    case XED_ICLASS_CMOVNB:   //JAE
+    case XED_ICLASS_SETNBE:
       return CMPA;
       
     case XED_ICLASS_JNLE:       //JG
 //    case XED_ICLASS_JNL:        //JGE
     case XED_ICLASS_CMOVNLE:    //JG
 //    case XED_ICLASS_CMOVNL:     //JGE
+    case XED_ICLASS_SETNLE:
       return CMPG;
       
     default:
